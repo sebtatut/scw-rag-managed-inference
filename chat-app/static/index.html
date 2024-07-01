@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-log" id="chat-log"></div>
+        <div class="input-container">
+            <input type="text" class="chat-input" id="chat-input" placeholder="Type a message...">
+            <button class="chat-send" id="chat-send">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const chatSendButton = document.getElementById('chat-send');
+        const chatInput = document.getElementById('chat-input');
+
+        const sendMessage = async () => {
+            const chatLog = document.getElementById('chat-log');
+            const message = chatInput.value;
+
+            // display the user's message in the chat log
+            const userMessage = document.createElement('p');
+            userMessage.className = 'user-message';
+            userMessage.innerHTML = `You: ${message.replace(/\n/g, '<br>')}`;
+            chatLog.appendChild(userMessage);
+            chatInput.value = '';
+
+            // create a single bot message element to be updated
+            const botMessage = document.createElement('p');
+            botMessage.className = 'bot-message';
+            botMessage.textContent = 'ScaleBot: ';
+            chatLog.appendChild(botMessage);
+            chatLog.scrollTop = chatLog.scrollHeight; // auto scroll to bottom
+
+            // send the message to the backend and handle the streamed response
+            const response = await fetch('http://localhost:8000/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: message,
+                    type: 'query_stream'
+                })
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+
+                // append the chunk to the bot message content
+                botMessage.innerHTML += chunk.replace(/\n/g, '<br>');
+                chatLog.scrollTop = chatLog.scrollHeight; // auto scroll to bottom
+            }
+        };
+
+        chatSendButton.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault(); // prevent the default action to avoid submitting the form
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
