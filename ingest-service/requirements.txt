@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+beautifulsoup4
+requests
+PyPDF2
+boto3
+numpy
+httpx
