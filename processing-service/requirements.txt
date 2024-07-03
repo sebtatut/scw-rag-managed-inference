@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+requests
+transformers
+sentence_transformers
+spacy
+psycopg2-binary
+python-dotenv
+nltk
