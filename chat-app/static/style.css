@@ -9,13 +9,86 @@ body {
     justify-content: center;
     align-items: center;
     height: 100vh;
+    overflow: hidden;
+}
+
+/* settings button */
+.settings-btn {
+    position: sticky;
+    top: 20px;
+    left: 20px;
+    background-color: #444;
+    color: white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+    cursor: pointer;
+    z-index: 1000;
+}
+
+.settings-btn:hover {
+    background-color: #792DD4;
+}
+
+/* settings panel */
+.settings-panel {
+    position: absolute;
+    top: 700px;
+    left: 35px;
+    background-color: #2E2E2E;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    width: 400px;
+    z-index: 1001;
+    visibility: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* settings panel row */
+.settings-row {
+    display: flex;
+    flex-direction: column;
+}
+
+/* form inputs */
+.settings-panel input,
+.settings-panel textarea {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background-color: #1E1E1E;
+    color: white;
+}
+
+.settings-panel textarea {
+    resize: vertical;
+}
+
+/* show panel when the class is toggled */
+.settings-panel.show {
+    visibility: visible;
+}
+
+/* sticky settings button container */
+.settings-container {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 1000;
 }
 
 /* chat container */
 .chat-container {
-    max-width: 600px;
+    max-width: 800px;
     width: 100%;
-    height: 100%;
+    height: 100vh;
     margin: 0 20px;
     padding: 20px;
     border: 1px solid #444;
@@ -23,66 +96,93 @@ body {
     background-color: #2E2E2E;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-end;
+    overflow: hidden;
 }
 
 /* chat log */
 .chat-log {
-    border: 1px solid #444;
-    border-radius: 8px;
     padding: 10px;
-    flex: 1;
     overflow-y: auto;
     background-color: #2E2E2E;
     color: #FFFFFF;
     margin-bottom: 10px;
+    word-wrap: break-word;
+    display: flex;
+    flex-direction: column;
 }
 
-.chat-log p {
+.message {
+    max-width: 75%;
+    padding: 8px;
+    border-radius: 12px;
     margin: 5px 0;
 }
 
-.chat-log .user-message {
+.user-message {
+    background-color: #3A3A3A;
     color: #E2E2E2;
+    align-self: flex-end;
+    padding: 12px;
+    border-radius: 8px;
+    max-width: 75%;
+    margin-left: auto;
+    margin-right: 0;
+    margin: 25px 0;
 }
 
-.chat-log .bot-message {
+.bot-message {
+    background-color: #444;
     color: #FFFFFF;
+    align-self: flex-start;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 5px 0;
+    margin-right: auto;
 }
 
 /* input container */
 .input-container {
     display: flex;
+    align-items: center;
     width: 100%;
+    padding: 10px;
+    background-color: #2E2E2E;
+    position: sticky;
+    bottom: 0;
+    border-top: 1px solid #444;
 }
 
 /* chat input */
 .chat-input {
     flex: 1;
     padding: 10px;
-    margin-right: 10px;
+    margin: 0 10px;
     border: 1px solid #444;
     border-radius: 8px;
     background-color: #1E1E1E;
     color: #FFFFFF;
+    resize: none;
+    max-height: 150px;
+    overflow-y: auto;
 }
 
-/* chat send button */
-.chat-send {
-    padding: 10px 20px;
+/* chat buttons */
+.chat-send, .chat-stop {
+    padding: 10px;
     border: none;
-    background-color: #521094; /* primary color */
+    background-color: #521094;
     color: white;
-    border-radius: 8px;
+    border-radius: 50%;
     cursor: pointer;
     transition: background-color 0.3s;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-.chat-send:hover {
-    background-color: #792DD4; /* highlight color */
-}
-
-/* highlight text */
-.highlight {
-    color: #BF95F9; /* highlight color */
+.chat-send:hover, .chat-stop:hover {
+    background-color: #792DD4;
 }
