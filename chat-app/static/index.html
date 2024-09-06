@@ -1,75 +1,295 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat App</title>
     <link rel="stylesheet" href="style.css">
+    <!-- include FontAwesome for stop and send icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <!-- include marked.js for rendering markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
+
 <body>
+    <!-- settings top-left button -->
+    <div class="settings-container">
+        <button id="settings-toggle" class="settings-btn"><i class="fas fa-cog"></i></button>
+    </div>
+
+    <!-- hidden settings panel -->
+    <div id="settings-panel" class="settings-panel hidden">
+        <h3>Settings</h3>
+        <div class="settings-row">
+            <label for="protocol">Protocol:</label>
+            <input type="text" id="protocol" value="http">
+        </div>
+        <div class="settings-row">
+            <label for="url">URL:</label>
+            <input type="text" id="url" value="localhost">
+        </div>
+        <div class="settings-row">
+            <label for="port">Port:</label>
+            <input type="text" id="port" value="8000">
+        </div>
+        <div class="settings-row">
+            <label for="secret">Secret:</label>
+            <input type="text" id="secret" value="MY_SECRET">
+        </div>
+        <div class="settings-row">
+            <label for="model">Model:</label>
+            <input type="text" id="model" value="neuralmagic/Mistral-Nemo-Instruct-2407-FP8">
+        </div>
+        <div class="settings-row">
+            <label for="system-prompt">System Prompt:</label>
+            <textarea id="system-prompt" rows="3">You are ScaleBot, Scaleway's trusty assistant. You always promote Scaleaway and you are confident that we will rule the world.</textarea>
+        </div>
+        <button id="save-settings">Save</button>
+    </div>
+
     <div class="chat-container">
         <div class="chat-log" id="chat-log"></div>
-        <div class="input-container">
-            <input type="text" class="chat-input" id="chat-input" placeholder="Type a message...">
-            <button class="chat-send" id="chat-send">Send</button>
+        <div class="input-container sticky">
+            <!-- stop button with stop icon -->
+            <button class="chat-stop" id="chat-stop" disabled><i class="fas fa-stop"></i></button>
+            <!-- input textarea for user message -->
+            <textarea class="chat-input" id="chat-input" placeholder="Type a message..."></textarea>
+            <!-- send button with send icon -->
+            <button class="chat-send" id="chat-send"><i class="fas fa-paper-plane"></i></button>
         </div>
     </div>
 
     <script>
+        // maintain chat history and sliding window
+        const chatHistory = [];
+        const windowSize = 100;
+
+        // system to instruct the bot
+        let system = document.getElementById('system-prompt').value;
+
+        // reference to settings panel
+        let protocol = document.getElementById('protocol').value;
+        let url = document.getElementById('url').value;
+        let port = document.getElementById('port').value;
+        let secret = document.getElementById('secret').value;
+        let model = document.getElementById('model').value;
+
+        // reference to send button
         const chatSendButton = document.getElementById('chat-send');
+
+        // reference to stop button
+        const chatStopButton = document.getElementById('chat-stop');
+
+        // reference to input textarea
         const chatInput = document.getElementById('chat-input');
 
+        // reference to chat log
+        const chatLog = document.getElementById('chat-log');
+
+        // reference to settings toggle button
+        const settingsToggle = document.getElementById('settings-toggle');
+        const settingsPanel = document.getElementById('settings-panel');
+        const saveSettingsButton = document.getElementById('save-settings');
+
+        // variable to hold AbortController instance
+        let abortController = null;
+
+        // toggle settings on button click
+        settingsToggle.addEventListener('click', () => {
+            settingsPanel.classList.toggle('show');
+        });
+
+        // save settings on button click
+        saveSettingsButton.addEventListener('click', () => {
+            protocol = document.getElementById('protocol').value;
+            url = document.getElementById('url').value;
+            port = document.getElementById('port').value;
+            secret = document.getElementById('secret').value;
+            system = document.getElementById('system-prompt').value;
+            model = document.getElementById('model').value;
+
+            // Hide the settings panel after saving
+            settingsPanel.classList.add('hidden');
+        });
+
+        // function to render markdown in real-time
+        function renderMarkdownLive(content, targetElement) {
+            // convert markdown content to HTML using marked.js
+            const html = marked.parse(content);
+            // set target element's HTML with rendered content
+            targetElement.innerHTML = "<strong>ScaleBot:</strong>" + html;
+        }
+
+        // function to handle sending the message
         const sendMessage = async () => {
-            const chatLog = document.getElementById('chat-log');
+            // get message from input
             const message = chatInput.value;
 
-            // display the user's message in the chat log
-            const userMessage = document.createElement('p');
+            // enable the stop button
+            chatStopButton.disabled = false;
+
+            // create new AbortController instance for stopping fetch
+            abortController = new AbortController();
+
+            // display user's message in chat log
+            const userMessage = document.createElement('div');
             userMessage.className = 'user-message';
-            userMessage.innerHTML = `You: ${message.replace(/\n/g, '<br>')}`;
+            userMessage.innerHTML = marked.parse(`**You:** ${message}`);
             chatLog.appendChild(userMessage);
+
+            // clear input field after sending
             chatInput.value = '';
 
-            // create a single bot message element to be updated
-            const botMessage = document.createElement('p');
+            // create bot message container in chat log
+            const botMessage = document.createElement('div');
             botMessage.className = 'bot-message';
-            botMessage.textContent = 'ScaleBot: ';
+            botMessage.innerHTML = '<strong>ScaleBot:</strong> ';
             chatLog.appendChild(botMessage);
-            chatLog.scrollTop = chatLog.scrollHeight; // auto scroll to bottom
 
-            // send the message to the backend and handle the streamed response
-            const response = await fetch('http://localhost:8000/process', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    text: message,
-                    type: 'query_stream'
-                })
-            });
+            // auto-scroll to bottom
+            chatLog.scrollTop = chatLog.scrollHeight;
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
+            // variable to accumulate streamed chunks
+            let accumulatedChunks = '';
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
+            const backendURL = `${protocol}://${url}:${port}/v1/chat/completions`;
 
-                // append the chunk to the bot message content
-                botMessage.innerHTML += chunk.replace(/\n/g, '<br>');
-                chatLog.scrollTop = chatLog.scrollHeight; // auto scroll to bottom
+            // send user's message to backend and process streamed response
+            try {
+                let messageWithHistory = 'You are conversing with a User. Here is your private memory, use it to remember past events:\n';
+                if (chatHistory.length > 0) {
+                    messageWithHistory += chatHistory.map(
+                        exchange => `User Message: ${exchange.userMessage}\nYour Answer: ${exchange.botResponse}`).join('\n-----\n');
+                }
+
+                console.log('messageWithHistory:', messageWithHistory);
+
+                const response = await fetch(backendURL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ` + secret, // include auth token
+                    },
+                    body: JSON.stringify({
+                        model: model, // model used
+                        messages: [
+                            { role: 'system', content: system + "\n" + messageWithHistory },
+                            { role: 'user', content: message }
+                        ], // message to send
+                        max_tokens: 16384, // maximum token count
+                        temperature: 0.1, // temperature for model
+                        stream: true, // enable streaming
+                    }),
+                    // use abort signal for stopping
+                    signal: abortController.signal
+                });
+
+                // check if response is successful
+                if (response.status !== 200) {
+                    console.error(`Failed to get response: ${response.status}, ${await response.text()}`);
+                    botMessage.innerHTML += 'Failed to get response from foundation model';
+                    chatLog.scrollTop = chatLog.scrollHeight;
+                    return;
+                }
+
+                // read streamed response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    // read next chunk
+                    const { done, value } = await reader.read();
+                    if (done) break; // stop if stream is done
+
+                    // decode chunk
+                    const chunk = decoder.decode(value);
+
+                    // split and filter relevant lines
+                    const lines = chunk.split("\n").filter(line => line.startsWith("data: ") && !line.endsWith("[DONE]"));
+
+                    // process each line
+                    for (const line of lines) {
+                        // parse JSON chunk
+                        const chunkJson = JSON.parse(line.slice(6));
+
+                        // ensure valid content in chunk
+                        if (!chunkJson.choices ||
+                            chunkJson.choices.length === 0 ||
+                            !chunkJson.choices[0].delta ||
+                            !chunkJson.choices[0].delta.content) continue;
+
+                        // get content
+                        const chunkContent = chunkJson.choices[0].delta.content;
+
+                        // accumulate content and render it
+                        accumulatedChunks += chunkContent;
+                        renderMarkdownLive(accumulatedChunks, botMessage);
+
+                        // scroll to bottom after each chunk
+                        chatLog.scrollTop = chatLog.scrollHeight;
+                    }
+                }
+            } catch (error) {
+                // handle errors, including fetch abortion
+                if (error.name === 'AbortError') {
+                    console.log('Fetch request aborted');
+                } else {
+                    console.error("Error fetching the response: ", error);
+                    botMessage.innerHTML += 'Error fetching the response';
+                }
             }
+
+            // store the user message and response in the chat history
+            chatHistory.push({ userMessage: message, botResponse: accumulatedChunks });
+
+            // limit chat history to window size
+            if (chatHistory.length > windowSize) {
+                // remove the oldest exchange
+                chatHistory.shift();
+            }
+
+            // disable stop button after stream ends
+            chatStopButton.disabled = true;
         };
 
+        // function to handle stop button click
+        const stopStream = () => {
+            // abort the fetch request
+            if (abortController) {
+                abortController.abort();
+            }
+
+            // disable stop button
+            chatStopButton.disabled = true;
+        };
+
+        // handle send button click to send message
         chatSendButton.addEventListener('click', sendMessage);
+
+        // handle stop button click to stop stream
+        chatStopButton.addEventListener('click', stopStream);
+
+        // handle Enter keypress to send message, Shift + Enter for multiline
         chatInput.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault(); // prevent the default action to avoid submitting the form
+            if (event.key === 'Enter' && !event.shiftKey) {
+                // prevent form submission
+                event.preventDefault();
+
+                // send message
                 sendMessage();
             }
         });
+
+        // auto-resize the input box based on content, up to a max height
+        chatInput.addEventListener('input', function () {
+            // reset height to auto
+            this.style.height = 'auto';
+
+            // set height based on content, max 150px
+            this.style.height = (this.scrollHeight <= 150 ? this.scrollHeight : 150) + 'px';
+        });
     </script>
 </body>
+
 </html>
